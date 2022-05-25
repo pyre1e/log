@@ -1,0 +1,22 @@
+version: '3.3'
+
+services:
+  main:
+    container_name: ${APP_NAME}-main
+    build:
+      context: ./docker/main
+    volumes:
+      - ./bin/:/root/bin/
+    ports:
+      - "80:80"
+
+  clickhouse:
+    container_name: ${APP_NAME}-clickhouse
+    image: clickhouse/clickhouse-server
+    ports:
+      - "8123:8123"
+    environment:
+      - CLICKHOUSE_USER=${CLICKHOUSE_USER}
+      - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD}
+    volumes:
+      - ./var/clickhouse/log/:/var/log/
