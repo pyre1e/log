@@ -9,12 +9,17 @@ services:
       - ./bin/:/root/bin/
     ports:
       - 80:80
+    depends_on:
+      - clickhouse
 
   clickhouse:
     container_name: ${APP_NAME}-clickhouse
     image: clickhouse/clickhouse-server
     ports:
       - 8123:8123
+      - 9000:9000
     volumes:
       - ./var/clickhouse/log/:/var/log/
       - ./docker/clickhouse/init.sql:/docker-entrypoint-initdb.d/init.sql
+    environment:
+      - CLICKHOUSE_INIT_TIMEOUT=60
