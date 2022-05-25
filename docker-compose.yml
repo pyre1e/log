@@ -8,15 +8,13 @@ services:
     volumes:
       - ./bin/:/root/bin/
     ports:
-      - "80:80"
+      - 80:80
 
   clickhouse:
     container_name: ${APP_NAME}-clickhouse
     image: clickhouse/clickhouse-server
     ports:
-      - "8123:8123"
-    environment:
-      - CLICKHOUSE_USER=${CLICKHOUSE_USER}
-      - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD}
+      - 8123:8123
     volumes:
       - ./var/clickhouse/log/:/var/log/
+      - ./docker/clickhouse/init.sql:/docker-entrypoint-initdb.d/init.sql
