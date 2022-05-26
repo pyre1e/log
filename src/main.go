@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"os"
 
@@ -88,25 +89,20 @@ func log(ctx *fasthttp.RequestCtx) {
 	go func() {
 		cctx := context.Background()
 		logId := uuid.New()
-
-		logBatch, err := conn.PrepareBatch(cctx, "INSERT INTO logs (id, user_id, timestamp, ip)")
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-
 		ip, _, _ := net.SplitHostPort(ctx.RemoteAddr().String())
-		logBatch.Append(logId, logEntry.UserId, logEntry.Timestamp, ip)
 
-		err = logBatch.Send()
-		if err != nil {
-			fmt.Println(err)
+		_, err := conn.Query(cctx,
+			"INSERT INTO logs  (id, user_id, timestamp, ip) VALUES ($1, $2, $3, $4);",
+			logId, logEntry.UserId, logEntry.Timestamp, ip,
+		)
+		if err != nil && err != io.EOF {
+			fmt.Println("Cannot add log entry", err)
 			return
 		}
 
 		eventsBatch, err := conn.PrepareBatch(cctx, "INSERT INTO events (id, log_id, type, message)")
 		if err != nil {
-			fmt.Println(err)
+			fmt.Println("Batch error", err)
 			return
 		}
 
@@ -116,7 +112,7 @@ func log(ctx *fasthttp.RequestCtx) {
 
 		err = eventsBatch.Send()
 		if err != nil {
-			fmt.Println(err)
+			fmt.Println("Cannot add events", err)
 			return
 		}
 	}()

@@ -1,2 +1,0 @@
-#!/usr/bin/bash
-ab -n ${1:-10000} -c ${2:-1000} -p .bench/postdata.json http://localhost/log
