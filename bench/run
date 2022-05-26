@@ -1,2 +1,3 @@
 #!/usr/bin/bash
+# ab -n ${1:-10000} -c ${2:-1000} -p $(dirname "$0")/postdata.json -k http://localhost/log
 ab -n ${1:-10000} -c ${2:-1000} -p $(dirname "$0")/postdata.json http://localhost/log

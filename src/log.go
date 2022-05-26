@@ -22,6 +22,19 @@ type logRequest struct {
 	Events    []*event  `json:"events" validate:"required"`
 }
 
+type channelMessage struct {
+	logEntry logRequest
+	ip       string
+}
+
+var channel = make(chan *channelMessage)
+
+func InitLog(app *App, workers int) {
+	for i := 0; i < workers; i++ {
+		go LogAddWorker(app)
+	}
+}
+
 func LogAdd(ctx *fasthttp.RequestCtx, app *App) {
 	logEntry := logRequest{}
 
@@ -46,32 +59,49 @@ func LogAdd(ctx *fasthttp.RequestCtx, app *App) {
 	}
 
 	go func() {
-		conn, connId, err := app.Pool.Acquire()
-		if err != nil {
-			fmt.Println("Connection pool error", err)
-			return
-		}
-
-		qctx := context.Background()
-		logId := uuid.New()
 		ip, _, _ := net.SplitHostPort(ctx.RemoteAddr().String())
 
-		_, err = (*conn).Query(qctx,
+		channel <- &channelMessage{
+			logEntry: logEntry,
+			ip:       ip,
+		}
+	}()
+}
+
+func LogAddWorker(app *App) {
+
+	qctx := context.Background()
+
+	pc, _, err := app.Pool.Acquire()
+	if err != nil {
+		fmt.Println("Connection pool error", err)
+		return
+	}
+
+	for {
+		msg := <-channel
+		logId := uuid.New()
+
+		_, err = pc.conn.Query(qctx,
 			"INSERT INTO logs  (id, user_id, timestamp, ip) VALUES ($1, $2, $3, $4);",
-			logId, logEntry.UserId, logEntry.Timestamp, ip,
+			logId, msg.logEntry.UserId, msg.logEntry.Timestamp, msg.ip,
 		)
 		if err != nil && err != io.EOF {
 			fmt.Println("Cannot add log entry", err)
 			return
 		}
 
-		eventsBatch, err := (*conn).PrepareBatch(qctx, "INSERT INTO events (id, log_id, type, message)")
+		if len(msg.logEntry.Events) == 0 {
+			return
+		}
+
+		eventsBatch, err := pc.conn.PrepareBatch(qctx, "INSERT INTO events (id, log_id, type, message)")
 		if err != nil {
 			fmt.Println("Batch error", err)
 			return
 		}
 
-		for _, event := range logEntry.Events {
+		for _, event := range msg.logEntry.Events {
 			eventsBatch.Append(uuid.New(), logId, event.EventName, event.EventTxt)
 		}
 
@@ -80,7 +110,5 @@ func LogAdd(ctx *fasthttp.RequestCtx, app *App) {
 			fmt.Println("Cannot add events", err)
 			return
 		}
-
-		app.Pool.Release(connId)
-	}()
+	}
 }

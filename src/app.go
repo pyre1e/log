@@ -11,8 +11,7 @@ type App struct {
 }
 
 type AppPoolOptions struct {
-	Size     int
-	Lifetime int
+	Size int
 }
 
 type AppOptions struct {
@@ -26,7 +25,7 @@ func CreateApp(options *AppOptions) *App {
 		Pool:     &AppPool{},
 		Validate: validator.New(),
 	}
-	app.Pool.Init(options.Pool.Size, options.Pool.Lifetime)
+	app.Pool.Init(options.Pool.Size)
 
 	return app
 }

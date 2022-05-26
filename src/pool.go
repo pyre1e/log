@@ -1,18 +1,13 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 )
-
-type ClickHousePool interface {
-	Init(count int) error
-	Acquire() (*driver.Conn, int, error)
-	Release(id int) error
-}
 
 type appPoolFreeStack struct {
 	ids     []int
@@ -47,17 +42,12 @@ type poolConnection struct {
 	available bool
 }
 
-func (pc *poolConnection) Renew(period time.Duration) {
-	for {
-		time.Sleep(period)
-
-		if pc.conn != nil {
-			pc.conn.Close()
-		}
-
-		if err := pc.Connect(); err != nil {
-			return
-		}
+func (pc *poolConnection) Renew() {
+	if pc.conn != nil {
+		pc.conn.Close()
+	}
+	if err := pc.Connect(); err != nil {
+		return
 	}
 }
 
@@ -69,6 +59,10 @@ func (pc *poolConnection) Connect() error {
 			Database: "default",
 			Username: "default",
 			Password: "",
+		},
+		MaxIdleConns: 4,
+		Compression: &clickhouse.Compression{
+			Method: 0x02,
 		},
 	})
 	if err != nil {
@@ -83,12 +77,11 @@ type AppPool struct {
 	connections []poolConnection
 	free        *appPoolFreeStack
 	size        int
-	lifetime    int
+	newconn     chan bool
 }
 
-func (pool *AppPool) Init(size int, lifetime int) {
+func (pool *AppPool) Init(size int) {
 	pool.size = size
-	pool.lifetime = lifetime
 	pool.connections = make([]poolConnection, size)
 	pool.free = &appPoolFreeStack{
 		ids:     make([]int, size),
@@ -99,7 +92,24 @@ func (pool *AppPool) Init(size int, lifetime int) {
 	}
 }
 
-func (pool *AppPool) Acquire() (*driver.Conn, int, error) {
+func (pool *AppPool) WaitForConnection() {
+	tmp := &poolConnection{}
+	for {
+		err := tmp.Connect()
+		if err != nil {
+			time.Sleep(time.Second)
+			continue
+		}
+		err = tmp.conn.Ping(context.Background())
+		if err != nil {
+			time.Sleep(time.Second)
+			continue
+		}
+		return
+	}
+}
+
+func (pool *AppPool) Acquire() (*poolConnection, int, error) {
 
 	id := pool.getNextId()
 	pc := &pool.connections[id]
@@ -109,15 +119,16 @@ func (pool *AppPool) Acquire() (*driver.Conn, int, error) {
 		if err != nil {
 			return nil, 0, err
 		}
-
-		go pc.Renew(time.Second * time.Duration(pool.lifetime))
 	}
 
-	return &pc.conn, id, nil
+	return pc, id, nil
 }
 
 func (pool *AppPool) Release(id int) {
 	pool.free.push(id)
+	go func() {
+		pool.newconn <- true
+	}()
 }
 
 func (pool *AppPool) getNextId() int {
@@ -125,6 +136,6 @@ func (pool *AppPool) getNextId() int {
 		if id := pool.free.pop(); id != -1 {
 			return id
 		}
-		time.Sleep(time.Millisecond * 50)
+		<-pool.newconn
 	}
 }
