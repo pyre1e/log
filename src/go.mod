@@ -1,4 +1,4 @@
-module main
+module github.com/xharto/log
 
 go 1.18
 

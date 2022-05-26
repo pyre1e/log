@@ -21,5 +21,6 @@ services:
     volumes:
       - ./var/clickhouse/log/:/var/log/
       - ./docker/clickhouse/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./docker/clickhouse/config.xml:/etc/clickhouse-server/config.xml
     environment:
       - CLICKHOUSE_INIT_TIMEOUT=60
