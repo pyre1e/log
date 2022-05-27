@@ -92,7 +92,7 @@ func LogAddWorker(app *App) {
 		}
 
 		if len(msg.logEntry.Events) == 0 {
-			return
+			continue
 		}
 
 		eventsBatch, err := pc.conn.PrepareBatch(qctx, "INSERT INTO events (id, log_id, type, message)")
