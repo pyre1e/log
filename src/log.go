@@ -88,7 +88,7 @@ func LogAddWorker(app *App) {
 		)
 		if err != nil && err != io.EOF {
 			fmt.Println("Cannot add log entry", err)
-			return
+			continue
 		}
 
 		if len(msg.logEntry.Events) == 0 {
@@ -98,7 +98,7 @@ func LogAddWorker(app *App) {
 		eventsBatch, err := pc.conn.PrepareBatch(qctx, "INSERT INTO events (id, log_id, type, message)")
 		if err != nil {
 			fmt.Println("Batch error", err)
-			return
+			continue
 		}
 
 		for _, event := range msg.logEntry.Events {
@@ -108,7 +108,7 @@ func LogAddWorker(app *App) {
 		err = eventsBatch.Send()
 		if err != nil {
 			fmt.Println("Cannot add events", err)
-			return
+			continue
 		}
 	}
 }
